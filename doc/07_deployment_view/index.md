@@ -335,7 +335,7 @@ The local stack (profile `dev`) starts the following services:
 | `backend` | Built from `docker/dev/Dockerfile.django` | Django development server with debugpy |
 | `celery` | Built from `docker/dev/Dockerfile.celery` | Celery worker with watchmedo auto-restart |
 | ElasticMQ | `softwaremill/elasticmq-native` | Local SQS-compatible message broker |
-| MinIO | `minio/minio` | Local S3-compatible object storage |
+| SeaweedFS (service `minio`) | `chrislusf/seaweedfs` | Local S3-compatible object storage (replaces MinIO, whose images are no longer published) |
 | PostgreSQL | `postgres:15` | Relational database |
 
 For workstation-specific setup instructions, see

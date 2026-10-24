@@ -4,7 +4,7 @@
 # Single entrypoint for all testing and development.
 #
 # Local service replacements:
-#   S3   -> MinIO      (API ${MINIO_API_PORT:-9010}, console ${MINIO_CONSOLE_PORT:-9011})
+#   S3   -> SeaweedFS  (API ${MINIO_API_PORT:-9010}, master UI ${MINIO_CONSOLE_PORT:-9011})
 #   SQS  -> ElasticMQ  (API 9324, UI 9325)
 #   DB   -> SQLite     (file-based, mounted from host)
 #   OIDC -> Disabled locally (no Keycloak — see ADR: internal/external URL mismatch
@@ -95,41 +95,83 @@
 
 services:
 
-  # --- MinIO (S3-compatible object storage) ---
+  # --- Object storage, S3-compatible (SeaweedFS) ---
+  # Still called "minio" so every S3_ENDPOINT_URL=http://minio:9000 below
+  # keeps resolving; the rename is a follow-up, not part of this fix.
   minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin123
+    # SeaweedFS 4.47, pulled straight from Docker Hub -- same image and digest
+    # as the WFS stack (QUAQ2-525/526).
+    #
+    # Every source for MinIO is gone: Docker Hub removed minio/minio and
+    # minio/mc, and quay.io now 401s anonymous pulls too. MinIO is archived
+    # upstream and distributed as source only. SeaweedFS is maintained,
+    # Apache-2.0, and speaks the S3 dialect this stack uses (sigv4, path
+    # addressing, presigned URLs).
+    #
+    # Pinned by digest: a tag can be moved to different content without anyone
+    # noticing. Raise the version by putting the new digest here.
+    image: docker.io/chrislusf/seaweedfs@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+    # `server` runs master+volume+filer+S3 in one process. -dir=/data comes
+    # from the image entrypoint; port 9000 keeps the endpoint URLs unchanged.
+    #
+    # -volume.max overrides the entrypoint's 0 ("as many 1 GB volumes as the
+    # free disk holds"). GitHub runners have only a few GB free, so the store
+    # would get too few slots and uploads would fail with S3 InternalError
+    # "failed to find writable volumes" (WFS QUAQ2-619). Volumes are not
+    # preallocated, so a slot costs no disk.
+    command: server -s3 -s3.port=9000 -s3.config=/etc/seaweedfs/s3.json -volume.max=50
     ports:
       - "${MINIO_API_PORT:-9010}:9000"
-      - "${MINIO_CONSOLE_PORT:-9011}:9001"
+      # Was the MinIO console; now the SeaweedFS master UI, the nearest
+      # equivalent for looking at the store by hand.
+      - "${MINIO_CONSOLE_PORT:-9011}:9333"
     volumes:
       # Bind-mounted to the registry-managed data tree so the bucket data lands
       # under <repo-data>/koalixswitzerland/products/koalixcrm-system/local-dev/
       # live/minio/ and is picked up by the git-mcp backup sweep (registry
       # local_data: minio_bucket koalixcrm-pdf-exports). Survives `down -v`.
+      # SeaweedFS does not read MinIO's on-disk format: an existing local
+      # MinIO data dir is not migrated, the bucket starts empty.
       - ${KOALIXCRM_MINIO_HOST_DIR:-${KOALIXCRM_MINIO_DIR:-./../koalixcrm_data/minio}}:/data
+      # Without this file SeaweedFS serves S3 unauthenticated, which would
+      # silently drop the minioadmin credential check the stack has today.
+      - ${KOALIXCRM_SYSTEM_HOST_DIR:-${KOALIXCRM_SYSTEM_DIR:-.}}/docker/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
     networks:
       - koalixcrm-net
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      # /healthz is served by the S3 gateway itself and needs no credentials.
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/healthz"]
       interval: 5s
       timeout: 3s
       retries: 10
     profiles: [integration, e2e, dev, legacy-celery]
 
-  # --- MinIO bucket setup (runs once, creates buckets, exits) ---
+  # --- Bucket setup (runs once, creates buckets, exits) ---
   minio-setup:
-    image: minio/mc:latest
+    # Same image as the server above: `weed shell` ships in it, so the bucket
+    # setup adds no second dependency the way minio/mc used to.
+    image: docker.io/chrislusf/seaweedfs@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
     depends_on:
       minio:
         condition: service_healthy
+    # s3.bucket.create refuses a bucket that already exists, and this container
+    # reruns on every `up`, so creation is best-effort and the listing after it
+    # is what decides -- that also catches a create that failed for a real
+    # reason instead of swallowing it the way `|| true` alone would.
     entrypoint: >
       sh -c "
-        mc alias set local http://minio:9000 minioadmin minioadmin123 &&
-        mc mb --ignore-existing local/koalixcrm-pdf-exports &&
+        set -e;
+        BUCKETS='koalixcrm-pdf-exports';
+        for i in $$(seq 1 30); do
+          if echo 's3.bucket.list' | weed shell -master=minio:9333 >/dev/null 2>&1; then break; fi;
+          sleep 2;
+        done;
+        for b in $$BUCKETS; do echo \"s3.bucket.create -name $$b\"; done |
+          weed shell -master=minio:9333 || true;
+        EXISTING=$$(echo 's3.bucket.list' | weed shell -master=minio:9333);
+        for b in $$BUCKETS; do
+          echo \"$$EXISTING\" | grep -q \"$$b\" || { echo \"bucket missing: $$b\"; exit 1; };
+        done;
         echo 'Buckets created successfully.'
       "
     networks:
