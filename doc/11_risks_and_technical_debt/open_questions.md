@@ -409,3 +409,55 @@ und bleiben unverändert; ein Sweep gegen die ADR-0021-Schlüsselungstabelle bes
 referenziert). Die katalogweite (nicht workspace-gebundene) Sonderstellung der GTIN-Auflösung
 überträgt sich unverändert von `Product.gtin` auf `ProductVariant.gtin`. Siehe ADR-0016,
 Nachtrag 2026-07-04, sowie ADR-0021 §Ripple-Liste Wareneingang und Identifier-Registry.
+
+---
+
+## OQ-0023 — Schwachstellen-Gate: Gelten die Schweregrad-Regeln für Test-/QA-Abhängigkeiten (`docker/requirements/test.txt`)?
+
+- **Raised:** 2026-10-25
+- **Context:** REQ-0029 AC-1, REQ-0030
+- **Frage:** Werden die Abhängigkeiten aus `docker/requirements/test.txt` (pytest, selenium, pylint usw.) mit denselben Schweregrad-Regeln gegated wie Laufzeitabhängigkeiten, oder werden sie nur berichtet, ohne den Merge zu blockieren?
+- **Blocks:** REQ-0029 AC-1 (Scan-Umfang), REQ-0030 (Geltungsbereich des Urteils)
+- **Zuständig:** Product Owner entscheidet; `kxcrm-requirements-engineer` aktualisiert die Requirements nach Entscheid.
+
+**Status:** Geschlossen (2026-10-25) — Test-Images werden mit derselben Schwelle gescannt wie die ausgelieferten Images (HIGH/CRITICAL in Anwendungsbibliotheken, auch ohne behobene Version), weil ihre Bibliotheken in CI mit Secrets laufen. Umgesetzt in REQ-0029 AC-1 und AC-2 (ORG-BE-ADR-0015 §2 und §3).
+
+
+---
+
+## OQ-0024 — Schwachstellen-Gate: Verhalten bei CRITICAL/HIGH ohne behobene Version
+
+- **Raised:** 2026-10-25
+- **Context:** REQ-0030 AC-1, REQ-0034
+- **Frage:** Wie verhält sich das Gate, wenn für einen CRITICAL- oder HIGH-Befund keine behobene Version existiert? Standard ist Blockieren (kein Override). Betriebliche Folge: Alle Merges auf `develop` und `main`, der Release-Workflow und der Nightly-Lauf bleiben rot, bis die Abhängigkeit ersetzt oder entfernt ist; Dependabot kann keinen Fix-PR liefern. Bleibt das so, oder gibt es eine befristete, dokumentierte Ausnahme (und wer genehmigt sie)?
+- **Blocks:** REQ-0030 AC-1 (Ausnahmefreiheit), REQ-0034 (Release-Blockade)
+- **Zuständig:** Product Owner entscheidet; `kxcrm-requirements-engineer` aktualisiert die Requirements nach Entscheid.
+
+**Status:** Geschlossen (2026-10-25) — Ein HIGH/CRITICAL-Befund ohne behobene Version blockiert den Merge (`ignore-unfixed: false`), bis ein Eintrag in `.trivyignore.yaml` mit nicht leerer `statement` und `expired_at` ihn abdeckt; eine eigene Ausnahme-Logik oder feste 30-/90-Tage-Fristen gibt es nicht mehr. Umgesetzt in REQ-0029 AC-2 und REQ-0031 (ORG-BE-ADR-0015 §3 und §4).
+
+
+---
+
+## OQ-0025 — Schwachstellen-Gate: Lock-Dateien für ungepinnte Einträge (`>=`)
+
+- **Raised:** 2026-10-25
+- **Context:** REQ-0029 AC-1; `setup.py` enthält Einträge wie `PyJWT[crypto]>=2.8.0`, `docker/requirements/test.txt` enthält ausschließlich `>=`-Angaben
+- **Frage:** Sind Lock-Dateien (aufgelöste, exakte Versionen inklusive transitiver Abhängigkeiten) erforderlich, damit der Scan die tatsächlich installierte Version kennt? Ohne Lock-Datei liegt für `>=`-Einträge keine eindeutige installierte Version vor, und Expositionsbewertungen (exakte Version) lassen sich nicht zuordnen.
+- **Blocks:** REQ-0029 AC-1 und Not in Scope (Auflösung ungepinnter Einträge), REQ-0031 AC-2 (Versionsabgleich)
+- **Zuständig:** Product Owner entscheidet; `kxcrm-requirements-engineer` aktualisiert die Requirements nach Entscheid.
+
+**Status:** Hinfällig (2026-10-25) — Die Frage nach Lock-Dateien besteht nicht mehr: Gescannt wird das gebaute Image, nicht ein Manifest, eine Lock-Datei oder eine rekonstruierte Installation. Siehe REQ-0029 AC-1 und Not in Scope (ORG-BE-ADR-0015 §2).
+
+
+---
+
+## OQ-0026 — Expositionsbewertung: Feld für das Bewertungsdatum fehlt
+
+- **Raised:** 2026-10-25
+- **Context:** REQ-0031 AC-2
+- **Frage:** Das Eintragsformat enthält `expires` (maximal 90 Tage nach Bewertung), aber kein Bewertungsdatum. Ohne dieses Feld lässt sich die 90-Tage-Regel nicht prüfen. Wird ein Feld `assessed_on` ergänzt, oder gilt die Frist relativ zum Auswertungsdatum (`expires` höchstens 90 Tage nach dem Tag des Laufs)?
+- **Blocks:** REQ-0031 AC-2, letzter Punkt (Frist-Prüfung)
+- **Zuständig:** Product Owner entscheidet; `kxcrm-requirements-engineer` aktualisiert die Requirements nach Entscheid.
+
+**Status:** Hinfällig (2026-10-25) — Die Frage nach `assessed_on` besteht nicht mehr: Es gibt kein eigenes Bewertungsformat, sondern die native Ausnahmedatei `.trivyignore.yaml` mit `statement` und `expired_at`. Siehe REQ-0031 (ORG-BE-ADR-0015 §4).
+

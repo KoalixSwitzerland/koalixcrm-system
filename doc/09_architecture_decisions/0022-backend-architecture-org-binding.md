@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-07-05
+- **Updated:** 2026-10-25 (binding of ORG-BE-ADR-0015)
 
 ## Context
 
@@ -16,7 +17,7 @@ internal ADRs.
 
 ## Decision
 
-KoalixCRM follows the org backend ADRs (0001–0013) as-written. The abstract terms in those ADRs
+KoalixCRM follows the org backend ADRs (0001–0013) as-written, and binds ORG-BE-ADR-0015 (dependency vulnerability gate, org status *proposed*) with the terms below. The abstract terms in those ADRs
 bind to the following KoalixCRM concretes:
 
 | Abstract term (org ADR) | KoalixCRM concrete |
@@ -36,7 +37,16 @@ bind to the following KoalixCRM concretes:
 | the product's architect role | `dev-kxcrm-architect` |
 | the product's Python QA role | `dev-kxcrm-python-qa-engineer` |
 | the QA import-boundary gate | greps `koalixcrm_microservices/*` and `*_api_py/*` for forbidden Django imports |
-| default branch | `develop` <!-- corrected main→develop 2026-07-08 (QUAQ2-227); this correction is pending product-owner confirmation --> |
+| default branch | `develop` <!-- corrected main→develop 2026-07-08 (QUAQ2-227); this correction is pending product-owner confirmation --> — the GitHub repository setting still names `main`; see layer status row ORG-BE-ADR-0015 §8 |
+| the shipped image(s) (ORG-BE-ADR-0015 §2, §7) | `ghcr.io/<owner>/koalixcrm_django` (`docker/prod/Dockerfile.django`) and `ghcr.io/<owner>/koalixcrm_celery` (`docker/prod/Dockerfile.celery`), both in the `koalixcrm` repository, both on `python:3.13` |
+| the test image(s) (§2) | the two images CI builds from the development Dockerfiles through the system compose: the Django test image (`docker/dev/Dockerfile.django`; services `unit-django-runner` and `integration-runner`, also `backend` and `backend-integration`) and the Celery test image (`docker/dev/Dockerfile.celery`; services `unit-celery-runner`, also `celery`). The `pdf-service` image belongs to the `koalixcrm-fop-service` repository and is not a backend image. |
+| the exception file (§4) | `.trivyignore.yaml` at the root of the `koalixcrm` repository |
+| the central actions repo pin (§5) | `QuantalQ/quaq-vulnerability-scan @ <commit SHA>` — not released yet, SHA pending; the pin sits in the `uses:` lines of the `koalixcrm` workflow files |
+| the local scan command (§6) | `make vuln-scan` at the root of the `koalixcrm` repository, no arguments; scans the locally built shipped and test images. The QA role runs it through the `docker-klx` sidecar. |
+| the gate status-check name (§7) | `Dependency Vulnerability Gate` (the merge-gate job name in `koalixcrm/.github/workflows/`) |
+| the integration branch (§7, §8) | `develop` (bound as the default branch; the repository setting is tracked in the §8 status row) |
+| the release branch (§8) | `main` — receives commits only through `release.yml` |
+| the Dependabot requirements directories (§8) | `/` (reads `setup.py`) and `/docker/requirements` (`django.txt`, `celery.txt`, `test.txt`); the `github-actions` ecosystem at `/` keeps the central-repo pin current |
 
 ## Isolation & authorization layer status (org ADR-0008 / ADR-0013)
 
@@ -55,6 +65,21 @@ since it was accepted, and KoalixCRM mounts every app under that segment without
 | ADR-0013 layer 2 — workspace-scoped role narrowing | not in force | [koalixcrm#429](https://github.com/KoalixSwitzerland/koalixcrm/issues/429) — needs layer 0 (#428) and the policy projection first |
 | ADR-0013 — role-policy projection | not in force | [koalixcrm#429](https://github.com/KoalixSwitzerland/koalixcrm/issues/429). `Group.permissions` is maintained by hand. `koalixcrm/core/access.py::permissions_for_role()` is a hardcoded role→verb map referenced **only from tests** — no production path consults a role. |
 | ADR-0008 / ADR-0013 negative-test gate | not in force | no test proves a crossed-workspace read/write is rejected (#428, #429) |
+
+### Dependency vulnerability gate status (ORG-BE-ADR-0015)
+
+All rows are `planned`; none is in force. The requirements REQ-0029 to REQ-0037 are the tracking
+references until implementation issues exist.
+
+| Layer | Status | Concrete / tracking |
+|-------|--------|---------------------|
+| §2–§4, §7 — merge gate on shipped and test images | planned | job `Dependency Vulnerability Gate` required on `develop`; REQ-0029 (blocking class), REQ-0030 (base-image findings reported), REQ-0031 (`.trivyignore.yaml`) |
+| §5 — shared scan from the central repository | planned | pin by full commit SHA, kept current by Dependabot `github-actions`; not released yet; REQ-0032 |
+| §6 — local scan command | planned | `make vuln-scan`; REQ-0033 |
+| §7 — weekly release-image scan | planned | workflow on `develop`, images `koalixcrm_django` and `koalixcrm_celery` at the latest release; REQ-0034 |
+| §7 — no further gate at release, rebuild, snapshot or deploy | planned | `release.yml`, `docker-django.yml`, `docker-celery.yml` contain no scan step; REQ-0035 |
+| §8 — default branch = integration branch | planned | default branch is `main` today; REQ-0036 |
+| §8 — Dependabot security updates on | planned | `dependabot/pip/…` branches already exist; REQ-0037 |
 
 ### Role vocabulary
 

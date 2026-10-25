@@ -119,3 +119,22 @@ Geregelt durch ADR-0005.
 Django-Basisklasse aus ADR-0001, die sicherstellt, dass tenant-eigene Daten automatisch nach
 `request.active_workspace` gefiltert werden. Alle produktdomänen-internen Entitäten erben diesen
 Mechanismus.
+
+---
+
+## Sicherheit und Lieferkette
+
+**Schwachstellen-Gate**  
+Prüfung der gebauten Images (ausgelieferte Images und Test-Images) mit Trivy bei jedem Pull Request nach
+`develop`. HIGH/CRITICAL (CVSS ≥ 7.0) in Anwendungsbibliotheken blockieren den Merge, auch ohne behobene
+Version; Betriebssystempakete werden berichtet; MEDIUM und LOW sind nicht Gegenstand. Ein wöchentlicher
+Lauf prüft das aktuelle Release-Image und blockiert nie. Geregelt durch REQ-0029 bis REQ-0035.
+
+**Ausnahmedatei (`.trivyignore.yaml`)**  
+Die eine Datei im Repository-Wurzelverzeichnis, in der Ausnahmen vom Gate stehen; jeder Eintrag trägt eine
+nicht leere `statement` und ein Ablaufdatum `expired_at`. Geregelt durch REQ-0031.
+
+**Gemeinsamer Scan (Shared Scan)**  
+Die Aktion, der wiederverwendbare Workflow, die `trivy.yaml`, das Skript für den lokalen Lauf und die
+Prüfung der Ausnahmeeinträge im öffentlichen Repository `QuantalQ/quaq-vulnerability-scan`, per
+vollständigem Commit-SHA fixiert. Geregelt durch REQ-0032.

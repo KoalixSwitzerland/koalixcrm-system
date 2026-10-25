@@ -61,6 +61,15 @@ nav:
       - "REQ-0025": 01_introduction_and_goals/requirements/REQ-0025.md
       - "REQ-0026": 01_introduction_and_goals/requirements/REQ-0026.md
       - "REQ-0027": 01_introduction_and_goals/requirements/REQ-0027.md
+      - "REQ-0029": 01_introduction_and_goals/requirements/REQ-0029.md
+      - "REQ-0030": 01_introduction_and_goals/requirements/REQ-0030.md
+      - "REQ-0031": 01_introduction_and_goals/requirements/REQ-0031.md
+      - "REQ-0032": 01_introduction_and_goals/requirements/REQ-0032.md
+      - "REQ-0033": 01_introduction_and_goals/requirements/REQ-0033.md
+      - "REQ-0034": 01_introduction_and_goals/requirements/REQ-0034.md
+      - "REQ-0035": 01_introduction_and_goals/requirements/REQ-0035.md
+      - "REQ-0036": 01_introduction_and_goals/requirements/REQ-0036.md
+      - "REQ-0037": 01_introduction_and_goals/requirements/REQ-0037.md
     - "Imported Source Documents":
       - "Project README": 01_introduction_and_goals/QQ_IMPORT_README.md
   - "2. Architecture Constraints":
